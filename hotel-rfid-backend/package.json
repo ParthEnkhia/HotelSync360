@@ -1,0 +1,27 @@
+{
+    "name":  "hotel-rfid-backend",
+    "version":  "1.0.0",
+    "description":  "",
+    "main":  "index.js",
+    "scripts":  {
+                    "test":  "node tests/smoke.js",
+                    "dev":  "nodemon index.js"
+                },
+    "keywords":  [
+
+                 ],
+    "author":  "",
+    "license":  "ISC",
+    "type":  "commonjs",
+    "dependencies":  {
+                         "bcrypt":  "^6.0.0",
+                         "cors":  "^2.8.6",
+                         "dotenv":  "^17.3.1",
+                         "express":  "^5.2.1",
+                         "jsonwebtoken":  "^9.0.3",
+                         "mysql2":  "^3.18.2"
+                     },
+    "devDependencies":  {
+                            "nodemon":  "^3.1.14"
+                        }
+}
