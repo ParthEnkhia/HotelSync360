@@ -75,7 +75,19 @@ CREATE TABLE STAFF (
     INDEX idx_staff_property_status (property_id, status)
 );
 
--- 6) Guest
+-- 6) Admin (for backend auth)
+CREATE TABLE ADMIN (
+    admin_id INT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_admin_email (email)
+);
+
+-- 7) Guest
 CREATE TABLE GUEST (
     guest_id INT PRIMARY KEY AUTO_INCREMENT,
     property_id INT NOT NULL,
@@ -97,7 +109,7 @@ CREATE TABLE GUEST (
     INDEX idx_guest_room (room_id)
 );
 
--- 7) RFID assignment history (replaces staff.rfid_tag_id and guest.rfid_tag_id)
+-- 8) RFID assignment history (replaces staff.rfid_tag_id and guest.rfid_tag_id)
 CREATE TABLE RFID_ASSIGNMENT (
     assignment_id INT PRIMARY KEY AUTO_INCREMENT,
     rfid_tag_id INT NOT NULL,
@@ -128,7 +140,7 @@ CREATE TABLE RFID_ASSIGNMENT (
     INDEX idx_assignment_tag_active (rfid_tag_id, is_active)
 );
 
--- 8) RFID readers
+-- 9) RFID readers
 CREATE TABLE RFID_READER (
     reader_id INT PRIMARY KEY AUTO_INCREMENT,
     property_id INT NOT NULL,
@@ -148,7 +160,7 @@ CREATE TABLE RFID_READER (
     INDEX idx_reader_property (property_id)
 );
 
--- 9) Movement logs
+-- 10) Movement logs
 CREATE TABLE MOVEMENT_TAG (
     movement_id BIGINT PRIMARY KEY AUTO_INCREMENT,
     scan_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -168,7 +180,7 @@ CREATE TABLE MOVEMENT_TAG (
     INDEX idx_movement_reader_time (reader_id, scan_time)
 );
 
--- 10) Task
+-- 11) Task
 CREATE TABLE TASK (
     task_id INT PRIMARY KEY AUTO_INCREMENT,
     property_id INT NOT NULL,
@@ -200,7 +212,7 @@ CREATE TABLE TASK (
     INDEX idx_task_property (property_id)
 );
 
--- 11) Staff-to-zone force allocation
+-- 12) Staff-to-zone force allocation
 CREATE TABLE STAFF_ZONE_ALLOCATION (
     allocation_id INT PRIMARY KEY AUTO_INCREMENT,
     property_id INT NOT NULL,
@@ -230,11 +242,6 @@ CREATE TABLE STAFF_ZONE_ALLOCATION (
     INDEX idx_alloc_staff_status (staff_id, status),
     INDEX idx_alloc_property (property_id)
 );
-
--- Optional seed row
-INSERT INTO PROPERTY (property_name, city, state, country)
-VALUES ('Default Hotel Property', 'Unknown', 'Unknown', 'India');
-
 
 START TRANSACTION;
 
