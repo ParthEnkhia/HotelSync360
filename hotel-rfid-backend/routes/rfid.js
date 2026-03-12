@@ -120,11 +120,36 @@ router.post("/assign", async (req, res) => {
       return res.status(404).json({ error: `${assignee_type} not found` });
     }
 
+    const [activeTagAssignments] = await connection.query(
+      `SELECT assignment_id, assignee_type, assignee_id
+       FROM RFID_ASSIGNMENT
+       WHERE rfid_tag_id = ? AND is_active = TRUE
+       LIMIT 1
+       FOR UPDATE`,
+      [rfid_tag_id]
+    );
+
+    if (
+      activeTagAssignments.length &&
+      activeTagAssignments[0].assignee_type === assignee_type &&
+      Number(activeTagAssignments[0].assignee_id) === Number(assignee_id)
+    ) {
+      await connection.commit();
+      return res.json({ message: "RFID already assigned to this assignee" });
+    }
+
     await connection.query(
       `UPDATE RFID_ASSIGNMENT
        SET is_active = FALSE, released_at = NOW()
        WHERE assignee_type = ? AND assignee_id = ? AND is_active = TRUE`,
       [assignee_type, assignee_id]
+    );
+
+    await connection.query(
+      `UPDATE RFID_ASSIGNMENT
+       SET is_active = FALSE, released_at = NOW()
+       WHERE rfid_tag_id = ? AND is_active = TRUE`,
+      [rfid_tag_id]
     );
 
     await connection.query(

@@ -3,12 +3,22 @@ const pool = require("../db");
 
 const router = express.Router();
 
+const ALLOWED_EVENT_TYPES = new Set(["ENTRY", "EXIT", "PING"]);
+
 router.post("/scan", async (req, res) => {
   try {
     const { rfid_tag_id, tag_code, reader_id, event_type } = req.body;
 
     if (!reader_id || (!rfid_tag_id && !tag_code)) {
       return res.status(400).json({ error: "reader_id and one of rfid_tag_id/tag_code are required" });
+    }
+
+    let normalizedEventType = "PING";
+    if (event_type !== undefined && event_type !== null && String(event_type).trim() !== "") {
+      normalizedEventType = String(event_type).trim().toUpperCase();
+      if (!ALLOWED_EVENT_TYPES.has(normalizedEventType)) {
+        return res.status(400).json({ error: "event_type must be ENTRY, EXIT, or PING" });
+      }
     }
 
     let resolvedTagId = rfid_tag_id;
@@ -26,7 +36,7 @@ router.post("/scan", async (req, res) => {
 
     await pool.query(
       "INSERT INTO MOVEMENT_TAG (rfid_tag_id, reader_id, event_type) VALUES (?, ?, ?)",
-      [resolvedTagId, reader_id, event_type || "PING"]
+      [resolvedTagId, reader_id, normalizedEventType]
     );
 
     res.json({ message: "Scan recorded" });
@@ -127,13 +137,18 @@ router.get("/analytics/current-occupancy", async (req, res) => {
     const [rows] = await pool.query(
       `SELECT z.zone_name, COUNT(*) AS current_count
        FROM (
-         SELECT rfid_tag_id, MAX(scan_time) AS latest_scan
-         FROM MOVEMENT_TAG
-         GROUP BY rfid_tag_id
+         SELECT m1.rfid_tag_id, MAX(m1.movement_id) AS latest_movement_id
+         FROM MOVEMENT_TAG m1
+         JOIN (
+           SELECT rfid_tag_id, MAX(scan_time) AS latest_scan
+           FROM MOVEMENT_TAG
+           GROUP BY rfid_tag_id
+         ) latest_scan
+           ON latest_scan.rfid_tag_id = m1.rfid_tag_id
+           AND latest_scan.latest_scan = m1.scan_time
+         GROUP BY m1.rfid_tag_id
        ) latest
-       JOIN MOVEMENT_TAG m
-         ON m.rfid_tag_id = latest.rfid_tag_id
-         AND m.scan_time = latest.latest_scan
+       JOIN MOVEMENT_TAG m ON m.movement_id = latest.latest_movement_id
        JOIN RFID_READER r ON m.reader_id = r.reader_id
        JOIN ZONE z ON r.zone_id = z.zone_id
        ${whereClause}

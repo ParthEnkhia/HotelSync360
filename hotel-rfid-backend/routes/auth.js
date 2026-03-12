@@ -5,12 +5,26 @@ const pool = require("../db");
 
 const router = express.Router();
 
-const JWT_SECRET = "supersecretkey"; // later move to .env
+let didWarnMissingJwtSecret = false;
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && !didWarnMissingJwtSecret) {
+    didWarnMissingJwtSecret = true;
+    console.warn(
+      "JWT_SECRET is not set. Falling back to an insecure default; set JWT_SECRET in the environment."
+    );
+  }
+  return secret || "supersecretkey";
+}
 
 // Register Admin
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "name, email, password are required" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -21,6 +35,9 @@ router.post("/register", async (req, res) => {
 
     res.json({ message: "Admin registered successfully" });
   } catch (error) {
+    if (error && error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "Email already registered" });
+    }
     res.status(500).json({ error: "Registration failed" });
   }
 });
@@ -49,7 +66,7 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { admin_id: admin.admin_id },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: "1h" }
     );
 
