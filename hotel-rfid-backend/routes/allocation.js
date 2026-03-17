@@ -20,6 +20,41 @@ router.post("/create", async (req, res) => {
       return res.status(400).json({ error: "property_id, staff_id, zone_id, start_time are required" });
     }
 
+    const [staffRows] = await pool.query(
+      "SELECT property_id FROM STAFF WHERE staff_id = ? LIMIT 1",
+      [staff_id]
+    );
+    if (!staffRows.length) {
+      return res.status(404).json({ error: "Staff member not found" });
+    }
+    if (Number(staffRows[0].property_id) !== Number(property_id)) {
+      return res.status(400).json({ error: "Staff member does not belong to the selected property" });
+    }
+
+    const [zoneRows] = await pool.query(
+      "SELECT property_id FROM ZONE WHERE zone_id = ? LIMIT 1",
+      [zone_id]
+    );
+    if (!zoneRows.length) {
+      return res.status(404).json({ error: "Zone not found" });
+    }
+    if (Number(zoneRows[0].property_id) !== Number(property_id)) {
+      return res.status(400).json({ error: "Zone does not belong to the selected property" });
+    }
+
+    if (allocated_by_staff_id) {
+      const [allocatedByRows] = await pool.query(
+        "SELECT property_id FROM STAFF WHERE staff_id = ? LIMIT 1",
+        [allocated_by_staff_id]
+      );
+      if (!allocatedByRows.length) {
+        return res.status(404).json({ error: "Allocated-by staff member not found" });
+      }
+      if (Number(allocatedByRows[0].property_id) !== Number(property_id)) {
+        return res.status(400).json({ error: "Allocated-by staff member must belong to the same property" });
+      }
+    }
+
     const [result] = await pool.query(
       `INSERT INTO STAFF_ZONE_ALLOCATION
       (property_id, staff_id, zone_id, allocated_by_staff_id, priority, status, start_time, end_time, reason)

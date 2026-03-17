@@ -4,6 +4,42 @@ const pool = require("../db");
 const router = express.Router();
 
 const ALLOWED_EVENT_TYPES = new Set(["ENTRY", "EXIT", "PING"]);
+const parsePropertyId = (value) => {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : NaN;
+};
+
+const requirePropertyId = (req, res) => {
+  const propertyId = parsePropertyId(req.query.property_id);
+  if (propertyId === null) {
+    res.status(400).json({ error: "property_id query parameter is required" });
+    return null;
+  }
+  if (Number.isNaN(propertyId)) {
+    res.status(400).json({ error: "property_id must be a positive integer" });
+    return null;
+  }
+  return propertyId;
+};
+
+const resolvePropertyScopedTag = async (rfidTagId, propertyId) => {
+  const [rows] = await pool.query(
+    `SELECT t.rfid_tag_id
+     FROM RFID_TAG t
+     JOIN MOVEMENT_TAG m ON m.rfid_tag_id = t.rfid_tag_id
+     JOIN RFID_READER r ON m.reader_id = r.reader_id
+     JOIN ZONE z ON r.zone_id = z.zone_id
+     WHERE t.rfid_tag_id = ? AND z.property_id = ?
+     LIMIT 1`,
+    [rfidTagId, propertyId]
+  );
+
+  return rows[0] || null;
+};
 
 router.post("/scan", async (req, res) => {
   try {
@@ -23,7 +59,16 @@ router.post("/scan", async (req, res) => {
 
     let resolvedTagId = rfid_tag_id;
 
-    if (!resolvedTagId && tag_code) {
+    if (resolvedTagId) {
+      const [tagRows] = await pool.query(
+        "SELECT rfid_tag_id FROM RFID_TAG WHERE rfid_tag_id = ? AND is_active = TRUE LIMIT 1",
+        [resolvedTagId]
+      );
+      if (!tagRows.length) {
+        return res.status(404).json({ error: "RFID tag not found" });
+      }
+      resolvedTagId = tagRows[0].rfid_tag_id;
+    } else if (tag_code) {
       const [tagRows] = await pool.query(
         "SELECT rfid_tag_id FROM RFID_TAG WHERE tag_code = ? AND is_active = TRUE LIMIT 1",
         [tag_code]
@@ -49,16 +94,23 @@ router.post("/scan", async (req, res) => {
 router.get("/current/:rfid_tag_id", async (req, res) => {
   try {
     const { rfid_tag_id } = req.params;
+    const propertyId = requirePropertyId(req, res);
+    if (!propertyId) return;
+
+    const tag = await resolvePropertyScopedTag(rfid_tag_id, propertyId);
+    if (!tag) {
+      return res.status(404).json({ error: "RFID tag not found for this property" });
+    }
 
     const [rows] = await pool.query(
       `SELECT z.zone_name, m.scan_time, m.event_type, r.reader_name
        FROM MOVEMENT_TAG m
        JOIN RFID_READER r ON m.reader_id = r.reader_id
        JOIN ZONE z ON r.zone_id = z.zone_id
-       WHERE m.rfid_tag_id = ?
+       WHERE m.rfid_tag_id = ? AND z.property_id = ?
        ORDER BY m.scan_time DESC
        LIMIT 1`,
-      [rfid_tag_id]
+      [rfid_tag_id, propertyId]
     );
 
     if (!rows.length) {
@@ -75,15 +127,22 @@ router.get("/current/:rfid_tag_id", async (req, res) => {
 router.get("/history/:rfid_tag_id", async (req, res) => {
   try {
     const { rfid_tag_id } = req.params;
+    const propertyId = requirePropertyId(req, res);
+    if (!propertyId) return;
+
+    const tag = await resolvePropertyScopedTag(rfid_tag_id, propertyId);
+    if (!tag) {
+      return res.status(404).json({ error: "RFID tag not found for this property" });
+    }
 
     const [rows] = await pool.query(
       `SELECT z.zone_name, m.scan_time, m.event_type, r.reader_name
        FROM MOVEMENT_TAG m
        JOIN RFID_READER r ON m.reader_id = r.reader_id
        JOIN ZONE z ON r.zone_id = z.zone_id
-       WHERE m.rfid_tag_id = ?
+       WHERE m.rfid_tag_id = ? AND z.property_id = ?
        ORDER BY m.scan_time DESC`,
-      [rfid_tag_id]
+      [rfid_tag_id, propertyId]
     );
 
     res.json(rows);
@@ -127,10 +186,7 @@ router.get("/analytics/current-occupancy", async (req, res) => {
   try {
     const { property_id } = req.query;
     const params = [];
-    let whereClause = "";
-
     if (property_id) {
-      whereClause = "WHERE z.property_id = ?";
       params.push(property_id);
     }
 
@@ -151,7 +207,8 @@ router.get("/analytics/current-occupancy", async (req, res) => {
        JOIN MOVEMENT_TAG m ON m.movement_id = latest.latest_movement_id
        JOIN RFID_READER r ON m.reader_id = r.reader_id
        JOIN ZONE z ON r.zone_id = z.zone_id
-       ${whereClause}
+       WHERE m.event_type IN ('ENTRY', 'PING')
+       ${property_id ? "AND z.property_id = ?" : ""}
        GROUP BY z.zone_id, z.zone_name
        ORDER BY current_count DESC`,
       params
@@ -194,15 +251,22 @@ router.get("/analytics/today-movements", async (req, res) => {
 router.get("/analytics/zone-time/:rfid_tag_id", async (req, res) => {
   try {
     const { rfid_tag_id } = req.params;
+    const propertyId = requirePropertyId(req, res);
+    if (!propertyId) return;
+
+    const tag = await resolvePropertyScopedTag(rfid_tag_id, propertyId);
+    if (!tag) {
+      return res.status(404).json({ error: "RFID tag not found for this property" });
+    }
 
     const [rows] = await pool.query(
       `SELECT z.zone_name, m.scan_time
        FROM MOVEMENT_TAG m
        JOIN RFID_READER r ON m.reader_id = r.reader_id
        JOIN ZONE z ON r.zone_id = z.zone_id
-       WHERE m.rfid_tag_id = ?
+       WHERE m.rfid_tag_id = ? AND z.property_id = ?
        ORDER BY m.scan_time`,
-      [rfid_tag_id]
+      [rfid_tag_id, propertyId]
     );
 
     res.json(rows);

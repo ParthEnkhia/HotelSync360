@@ -1,13 +1,15 @@
 import { useState } from "react";
 import api from "./utils/axiosConfig";
 
-function CurrentLocation() {
+function CurrentLocation({ propertyId = "1" }) {
   const [rfid, setRfid] = useState("");
   const [location, setLocation] = useState(null);
 
   const getLocation = async () => {
     try {
-      const res = await api.get(`/movement/current/${Number(rfid)}`);
+      const res = await api.get(`/movement/current/${Number(rfid)}`, {
+        params: { property_id: Number(propertyId || 1) },
+      });
       setLocation(res.data);
     } catch (err) {
       setLocation(null);
@@ -19,6 +21,7 @@ function CurrentLocation() {
   return (
     <div>
       <h2>Current Location</h2>
+      <p>Property ID: <strong>{propertyId || "1"}</strong></p>
       <input placeholder="RFID Tag ID" value={rfid} onChange={(e) => setRfid(e.target.value)} />
       <button onClick={getLocation}>Check</button>
 

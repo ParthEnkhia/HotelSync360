@@ -1,4 +1,25 @@
 const BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000";
+const AUTH_TOKEN_STORAGE_KEY = "hotelSync360.authToken";
+
+export const getAuthToken = () => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+};
+
+export const setAuthToken = (token) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (token) {
+    window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+};
 
 const toQueryString = (params = {}) => {
   const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== "");
@@ -22,10 +43,12 @@ const parseResponse = async (response) => {
 
 const request = async (method, path, body, config = {}) => {
   const url = `${BASE_URL}${path}${toQueryString(config.params)}`;
+  const token = getAuthToken();
   const response = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(config.headers || {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,

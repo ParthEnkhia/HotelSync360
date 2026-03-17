@@ -70,6 +70,23 @@ body {
   color: var(--warn-text);
 }
 
+.auth-panel {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.auth-panel h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.auth-status {
+  margin: 8px 4px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 input,
 select,
 button,

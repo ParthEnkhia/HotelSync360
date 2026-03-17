@@ -8,7 +8,11 @@ const allocationRoutes = require("./routes/allocation");
 const authRoutes = require("./routes/auth");
 const authMiddleware = require("./middleware/authMiddleware");
 
-const pool = require("./db");
+const {
+  refreshDatabaseStatus,
+  getDatabaseStatus,
+  isDatabaseError,
+} = require("./db");
 
 const app = express();
 
@@ -39,18 +43,35 @@ app.use(
 );
 app.use(express.json());
 
-pool
-  .getConnection()
-  .then((conn) => {
-    console.log("Database connected successfully");
-    conn.release();
-  })
-  .catch((err) => console.error("Database connection failed:", err));
-
 app.use("/auth", authRoutes);
 
 app.get("/", (req, res) => {
-  res.send("Hotel RFID Backend Running");
+  const database = getDatabaseStatus();
+  res.json({
+    message: "Hotel RFID Backend Running",
+    auth_required: authRequired,
+    database_healthy: database.healthy,
+  });
+});
+
+app.get("/health", async (req, res) => {
+  try {
+    await refreshDatabaseStatus();
+  } catch (error) {
+    // Health route reports degraded state instead of throwing a generic 500.
+  }
+
+  const database = getDatabaseStatus();
+  const status = database.healthy ? "ok" : "degraded";
+
+  res.status(database.healthy ? 200 : 503).json({
+    status,
+    service: "hotel-rfid-backend",
+    auth_required: authRequired,
+    uptime_seconds: Math.round(process.uptime()),
+    database,
+    checked_at: new Date().toISOString(),
+  });
 });
 
 const authRequired =
@@ -69,10 +90,35 @@ app.use((err, req, res, next) => {
   if (err && err.message === "Not allowed by CORS") {
     return res.status(403).json({ error: "CORS blocked" });
   }
+  if (isDatabaseError(err)) {
+    return res.status(503).json({
+      error: "Database unavailable",
+      details: getDatabaseStatus().lastError || {
+        code: err.code || "UNKNOWN_DB_ERROR",
+        message: err.message || "Database connection failed",
+      },
+    });
+  }
   return next(err);
 });
 
 const PORT = Number(process.env.PORT || 5000);
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+async function startServer() {
+  try {
+    await refreshDatabaseStatus();
+    console.log("Database connected successfully");
+  } catch (err) {
+    console.error("Database connection failed:", err);
+  }
+
+  return app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, startServer };

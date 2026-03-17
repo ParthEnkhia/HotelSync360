@@ -24,6 +24,7 @@ CREATE TABLE ZONE (
     CONSTRAINT fk_zone_property
         FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
         ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE KEY uq_zone_property_zone (property_id, zone_id),
     UNIQUE KEY uq_zone_per_property (property_id, zone_name),
     INDEX idx_zone_property (property_id)
 );
@@ -72,6 +73,7 @@ CREATE TABLE STAFF (
     CONSTRAINT fk_staff_property
         FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
         ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE KEY uq_staff_property_staff (property_id, staff_id),
     INDEX idx_staff_property_status (property_id, status)
 );
 
@@ -232,11 +234,20 @@ CREATE TABLE STAFF_ZONE_ALLOCATION (
     CONSTRAINT fk_alloc_staff
         FOREIGN KEY (staff_id) REFERENCES STAFF(staff_id)
         ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_property_staff
+        FOREIGN KEY (property_id, staff_id) REFERENCES STAFF(property_id, staff_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_alloc_zone
         FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
         ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_property_zone
+        FOREIGN KEY (property_id, zone_id) REFERENCES ZONE(property_id, zone_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_alloc_by_staff
         FOREIGN KEY (allocated_by_staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_property_allocated_by
+        FOREIGN KEY (property_id, allocated_by_staff_id) REFERENCES STAFF(property_id, staff_id)
         ON DELETE SET NULL ON UPDATE CASCADE,
     INDEX idx_alloc_zone_status_time (zone_id, status, start_time),
     INDEX idx_alloc_staff_status (staff_id, status),
