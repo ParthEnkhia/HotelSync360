@@ -11,7 +11,7 @@ const toSqlDatetime = (input) => {
   return input.replace("T", " ");
 };
 
-function StaffAllocation({ propertyId = "1" }) {
+function StaffAllocation({ propertyId, staff = [], zones = [] }) {
   const [viewMode, setViewMode] = useState("all");
   const [allocations, setAllocations] = useState([]);
   const [form, setForm] = useState({
@@ -25,10 +25,15 @@ function StaffAllocation({ propertyId = "1" }) {
   });
 
   const fetchAllocations = useCallback(async () => {
+    if (!propertyId) {
+      setAllocations([]);
+      return;
+    }
+
     try {
       const endpoint = viewMode === "active" ? "/allocation/active" : "/allocation/all";
       const res = await api.get(endpoint, {
-        params: { property_id: Number(propertyId || 1) },
+        params: { property_id: Number(propertyId) },
       });
       setAllocations(res.data);
     } catch (err) {
@@ -42,14 +47,19 @@ function StaffAllocation({ propertyId = "1" }) {
   }, [fetchAllocations]);
 
   const createAllocation = async () => {
+    if (!propertyId) {
+      alert("Select a property first");
+      return;
+    }
+
     if (!form.staff_id || !form.zone_id || !form.start_time) {
-      alert("Staff ID, Zone ID and Start Time are required");
+      alert("Staff member, zone and start time are required");
       return;
     }
 
     try {
       await api.post("/allocation/create", {
-        property_id: Number(propertyId || 1),
+        property_id: Number(propertyId),
         staff_id: Number(form.staff_id),
         zone_id: Number(form.zone_id),
         allocated_by_staff_id: form.allocated_by_staff_id ? Number(form.allocated_by_staff_id) : null,
@@ -88,25 +98,43 @@ function StaffAllocation({ propertyId = "1" }) {
   return (
     <div>
       <h2>Staff Force Allocation</h2>
-      <p>Property ID: <strong>{propertyId || "1"}</strong></p>
+      {!propertyId ? <p>Select a property to manage staff allocation.</p> : null}
 
       <h3>Create Allocation</h3>
       <div className="grid-3">
-        <input
-          placeholder="Staff ID"
+        <select
           value={form.staff_id}
           onChange={(e) => setForm((prev) => ({ ...prev, staff_id: e.target.value }))}
-        />
-        <input
-          placeholder="Zone ID"
+        >
+          <option value="">Select Staff Member</option>
+          {staff.map((member) => (
+            <option key={member.staff_id} value={member.staff_id}>
+              {member.name}{member.role ? ` - ${member.role}` : ""}
+            </option>
+          ))}
+        </select>
+        <select
           value={form.zone_id}
           onChange={(e) => setForm((prev) => ({ ...prev, zone_id: e.target.value }))}
-        />
-        <input
-          placeholder="Allocated By Staff ID (Optional)"
+        >
+          <option value="">Select Zone</option>
+          {zones.map((zone) => (
+            <option key={zone.zone_id} value={zone.zone_id}>
+              {zone.zone_name}{zone.zone_category ? ` - ${zone.zone_category}` : ""}
+            </option>
+          ))}
+        </select>
+        <select
           value={form.allocated_by_staff_id}
           onChange={(e) => setForm((prev) => ({ ...prev, allocated_by_staff_id: e.target.value }))}
-        />
+        >
+          <option value="">Allocated By (Optional)</option>
+          {staff.map((member) => (
+            <option key={member.staff_id} value={member.staff_id}>
+              {member.name}
+            </option>
+          ))}
+        </select>
         <select
           value={form.priority}
           onChange={(e) => setForm((prev) => ({ ...prev, priority: e.target.value }))}
@@ -133,7 +161,7 @@ function StaffAllocation({ propertyId = "1" }) {
           onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
         />
       </div>
-      <button onClick={createAllocation}>Create Allocation</button>
+      <button onClick={createAllocation} disabled={!propertyId}>Create Allocation</button>
 
       <h3>Allocation Dashboard</h3>
       <label>View: </label>
@@ -157,19 +185,19 @@ function StaffAllocation({ propertyId = "1" }) {
           </tr>
         </thead>
         <tbody>
-          {allocations.map((a) => (
-            <tr key={a.allocation_id}>
-              <td>{a.allocation_id}</td>
-              <td>{a.staff_name ? `${a.staff_name} (#${a.staff_id})` : `#${a.staff_id}`}</td>
-              <td>{a.zone_name ? `${a.zone_name} (#${a.zone_id})` : `#${a.zone_id}`}</td>
-              <td>{a.priority}</td>
-              <td>{a.status}</td>
-              <td>{a.start_time}</td>
-              <td>{a.end_time || "-"}</td>
+          {allocations.map((allocation) => (
+            <tr key={allocation.allocation_id}>
+              <td>{allocation.allocation_id}</td>
+              <td>{allocation.staff_name ? `${allocation.staff_name} (#${allocation.staff_id})` : `#${allocation.staff_id}`}</td>
+              <td>{allocation.zone_name ? `${allocation.zone_name} (#${allocation.zone_id})` : `#${allocation.zone_id}`}</td>
+              <td>{allocation.priority}</td>
+              <td>{allocation.status}</td>
+              <td>{allocation.start_time}</td>
+              <td>{allocation.end_time || "-"}</td>
               <td>
                 <select
-                  value={a.status}
-                  onChange={(e) => updateStatus(a.allocation_id, e.target.value)}
+                  value={allocation.status}
+                  onChange={(e) => updateStatus(allocation.allocation_id, e.target.value)}
                 >
                   {statusOptions.map((status) => (
                     <option key={status} value={status}>

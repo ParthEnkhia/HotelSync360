@@ -23,10 +23,39 @@ body {
   font-family: "Segoe UI", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif;
 }
 
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
 .app-shell {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+}
+
+.login-copy,
+.subtle {
+  color: var(--muted);
 }
 
 .app-header {
@@ -37,11 +66,28 @@ body {
   margin-bottom: 16px;
 }
 
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: var(--brand);
+  font-weight: 700;
+}
+
 .toolbar {
   display: flex;
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .panel {
@@ -70,27 +116,11 @@ body {
   color: var(--warn-text);
 }
 
-.auth-panel {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-}
-
-.auth-panel h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
-}
-
-.auth-status {
-  margin: 8px 4px 0;
-  color: var(--muted);
-  font-size: 14px;
-}
-
 input,
 select,
 button,
 textarea {
+  width: 100%;
   border: 1px solid #c8d3e1;
   border-radius: 8px;
   padding: 8px 10px;
@@ -107,6 +137,15 @@ button {
 
 button:hover {
   background: var(--brand-dark);
+}
+
+.secondary-button {
+  background: #ffffff;
+  color: var(--brand);
+}
+
+.secondary-button:hover {
+  background: #f0fdfa;
 }
 
 button:disabled {
@@ -131,10 +170,15 @@ th {
   background: #f1f5f9;
 }
 
+.grid-1,
 .grid-2,
 .grid-3 {
   display: grid;
   gap: 6px;
+}
+
+.grid-1 {
+  grid-template-columns: 1fr;
 }
 
 .grid-2 {
@@ -149,6 +193,11 @@ th {
   grid-column: 1 / -1;
 }
 
+.inline-actions {
+  display: flex;
+  gap: 8px;
+}
+
 @media (max-width: 768px) {
   .app-shell {
     padding: 12px;
@@ -156,5 +205,13 @@ th {
 
   h1 {
     font-size: 22px;
+  }
+
+  .header-row {
+    flex-direction: column;
+  }
+
+  .inline-actions {
+    flex-direction: column;
   }
 }

@@ -6,6 +6,7 @@ const movementRoutes = require("./routes/movement");
 const rfidRoutes = require("./routes/rfid");
 const allocationRoutes = require("./routes/allocation");
 const authRoutes = require("./routes/auth");
+const referenceRoutes = require("./routes/reference");
 const authMiddleware = require("./middleware/authMiddleware");
 
 const {
@@ -84,6 +85,7 @@ app.use("/guest", guestRoutes);
 app.use("/movement", movementRoutes);
 app.use("/rfid", rfidRoutes);
 app.use("/allocation", allocationRoutes);
+app.use("/reference", referenceRoutes);
 
 // Ensure CORS rejections return JSON (instead of default HTML error page)
 app.use((err, req, res, next) => {

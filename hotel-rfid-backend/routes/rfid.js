@@ -24,7 +24,7 @@ router.post("/create", async (req, res) => {
   const connection = await pool.getConnection();
 
   try {
-    const { tag_type, tag_code } = req.body;
+    const { tag_type, tag_code, assignee_type, assignee_id } = req.body;
 
     if (!tag_type) {
       return res.status(400).json({ error: "tag_type is required" });
@@ -39,10 +39,53 @@ router.post("/create", async (req, res) => {
       finalTagCode = await generateUniqueTagCode(connection);
     }
 
+    if ((assignee_type && !assignee_id) || (!assignee_type && assignee_id)) {
+      return res.status(400).json({ error: "assignee_type and assignee_id must be provided together" });
+    }
+
+    if (assignee_type && !["GUEST", "STAFF"].includes(assignee_type)) {
+      return res.status(400).json({ error: "assignee_type must be GUEST or STAFF" });
+    }
+
+    if (assignee_type && assignee_type !== tag_type) {
+      return res.status(400).json({ error: "assignee_type must match tag_type" });
+    }
+
+    await connection.beginTransaction();
+
     const [result] = await connection.query(
       "INSERT INTO RFID_TAG (tag_code, tag_type, is_active) VALUES (?, ?, TRUE)",
       [finalTagCode, tag_type]
     );
+
+    if (assignee_type && assignee_id) {
+      const entityTable = assignee_type === "GUEST" ? "GUEST" : "STAFF";
+      const entityColumn = assignee_type === "GUEST" ? "guest_id" : "staff_id";
+      const [entityRows] = await connection.query(
+        `SELECT ${entityColumn} FROM ${entityTable} WHERE ${entityColumn} = ? LIMIT 1`,
+        [assignee_id]
+      );
+
+      if (!entityRows.length) {
+        await connection.rollback();
+        return res.status(404).json({ error: `${assignee_type} not found` });
+      }
+
+      await connection.query(
+        `UPDATE RFID_ASSIGNMENT
+         SET is_active = FALSE, released_at = NOW()
+         WHERE assignee_type = ? AND assignee_id = ? AND is_active = TRUE`,
+        [assignee_type, assignee_id]
+      );
+
+      await connection.query(
+        `INSERT INTO RFID_ASSIGNMENT (rfid_tag_id, assignee_type, assignee_id, assigned_at, is_active)
+         VALUES (?, ?, ?, NOW(), TRUE)`,
+        [result.insertId, assignee_type, assignee_id]
+      );
+    }
+
+    await connection.commit();
 
     res.json({
       message: "RFID tag created",
@@ -51,6 +94,7 @@ router.post("/create", async (req, res) => {
     });
   } catch (error) {
     console.error("Create RFID Error:", error);
+    await connection.rollback();
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(400).json({ error: "tag_code already exists" });
     }
@@ -64,9 +108,17 @@ router.get("/all", async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT t.rfid_tag_id, t.tag_code, t.tag_type, t.is_active,
-              ra.assignee_type, ra.assignee_id, ra.assigned_at
+              ra.assignee_type, ra.assignee_id, ra.assigned_at,
+              CASE
+                WHEN ra.assignee_type = 'GUEST' THEN g.name
+                WHEN ra.assignee_type = 'STAFF' THEN s.name
+                ELSE NULL
+              END AS assignee_name
        FROM RFID_TAG t
        LEFT JOIN RFID_ASSIGNMENT ra ON ra.rfid_tag_id = t.rfid_tag_id AND ra.is_active = TRUE
+       LEFT JOIN GUEST g ON ra.assignee_type = 'GUEST' AND ra.assignee_id = g.guest_id
+       LEFT JOIN STAFF s ON ra.assignee_type = 'STAFF' AND ra.assignee_id = s.staff_id
+       WHERE t.is_active = TRUE
        ORDER BY t.rfid_tag_id DESC`
     );
 

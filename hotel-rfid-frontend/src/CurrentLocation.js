@@ -1,14 +1,19 @@
 import { useState } from "react";
 import api from "./utils/axiosConfig";
 
-function CurrentLocation({ propertyId = "1" }) {
+function CurrentLocation({ propertyId, tags = [] }) {
   const [rfid, setRfid] = useState("");
   const [location, setLocation] = useState(null);
 
   const getLocation = async () => {
+    if (!propertyId || !rfid) {
+      alert("Select a property and RFID tag first");
+      return;
+    }
+
     try {
       const res = await api.get(`/movement/current/${Number(rfid)}`, {
-        params: { property_id: Number(propertyId || 1) },
+        params: { property_id: Number(propertyId) },
       });
       setLocation(res.data);
     } catch (err) {
@@ -21,9 +26,16 @@ function CurrentLocation({ propertyId = "1" }) {
   return (
     <div>
       <h2>Current Location</h2>
-      <p>Property ID: <strong>{propertyId || "1"}</strong></p>
-      <input placeholder="RFID Tag ID" value={rfid} onChange={(e) => setRfid(e.target.value)} />
-      <button onClick={getLocation}>Check</button>
+      <select value={rfid} onChange={(e) => setRfid(e.target.value)}>
+        <option value="">Select RFID Tag</option>
+        {tags.map((tag) => (
+          <option key={tag.rfid_tag_id} value={tag.rfid_tag_id}>
+            {tag.tag_code}
+            {tag.assignee_name ? ` - ${tag.assignee_name}` : ""}
+          </option>
+        ))}
+      </select>
+      <button onClick={getLocation} disabled={!propertyId || !rfid}>Check</button>
 
       {location && (
         <div>
