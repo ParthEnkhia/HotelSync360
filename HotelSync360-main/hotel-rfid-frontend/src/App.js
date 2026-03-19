@@ -7,6 +7,7 @@ import RFIDManagement from "./RFIDManagement";
 import StaffAllocation from "./StaffAllocation";
 import StaffManagement from "./StaffManagement";
 import ReferenceSetup from "./ReferenceSetup";
+import ZoneHeatmap from "./ZoneHeatmap";
 import api, { getAuthToken, setAuthToken } from "./utils/axiosConfig";
 
 const emptyPropertyContext = {
@@ -28,6 +29,7 @@ const dashboardTabs = [
   { id: "allocation", label: "Allocation" },
   { id: "guest", label: "Guests" },
   { id: "scan", label: "Scan" },
+  { id: "heatmap", label: "Heatmap" },
   { id: "current", label: "Current" },
   { id: "history", label: "History" },
 ];
@@ -356,6 +358,8 @@ function App() {
           {activeTab === "scan" ? (
             <ScanRFID tags={propertyContext.active_tags} readers={propertyContext.readers} />
           ) : null}
+
+          {activeTab === "heatmap" ? <ZoneHeatmap propertyId={propertyId} /> : null}
 
           {activeTab === "current" ? (
             <CurrentLocation propertyId={propertyId} tags={propertyContext.active_tags} />
