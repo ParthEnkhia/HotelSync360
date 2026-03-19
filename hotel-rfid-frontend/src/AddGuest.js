@@ -1,7 +1,7 @@
 import { useState } from "react";
 import api from "./utils/axiosConfig";
 
-function AddGuest({ propertyId = "1" }) {
+function AddGuest({ propertyId, rooms = [], availableGuestTags = [], onDataChanged }) {
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -15,8 +15,13 @@ function AddGuest({ propertyId = "1" }) {
   };
 
   const handleSubmit = async () => {
+    if (!propertyId) {
+      alert("Select a property first");
+      return;
+    }
+
     if (!form.name || !form.room_id || !form.rfid_tag_id) {
-      alert("Name, Room ID and RFID Tag ID are required");
+      alert("Name, room number and guest RFID tag are required");
       return;
     }
 
@@ -31,6 +36,9 @@ function AddGuest({ propertyId = "1" }) {
       });
       alert("Guest added successfully");
       setForm({ name: "", phone: "", room_id: "", rfid_tag_id: "" });
+      if (onDataChanged) {
+        await onDataChanged();
+      }
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Error adding guest";
       alert(errorMessage);
@@ -42,18 +50,28 @@ function AddGuest({ propertyId = "1" }) {
   return (
     <div>
       <h2>Add Guest</h2>
-      <p>Property ID: <strong>{propertyId || "1"}</strong></p>
+      {!propertyId ? <p>Select a property to add a guest.</p> : null}
       <div className="grid-2">
         <input placeholder="Name" value={form.name} onChange={(e) => updateField("name", e.target.value)} />
         <input placeholder="Phone" value={form.phone} onChange={(e) => updateField("phone", e.target.value)} />
-        <input placeholder="Room ID" value={form.room_id} onChange={(e) => updateField("room_id", e.target.value)} />
-        <input
-          placeholder="RFID Tag ID"
-          value={form.rfid_tag_id}
-          onChange={(e) => updateField("rfid_tag_id", e.target.value)}
-        />
+        <select value={form.room_id} onChange={(e) => updateField("room_id", e.target.value)}>
+          <option value="">Select Room</option>
+          {rooms.map((room) => (
+            <option key={room.room_id} value={room.room_id}>
+              {room.room_number}{room.room_type ? ` - ${room.room_type}` : ""}
+            </option>
+          ))}
+        </select>
+        <select value={form.rfid_tag_id} onChange={(e) => updateField("rfid_tag_id", e.target.value)}>
+          <option value="">Select Guest RFID Tag</option>
+          {availableGuestTags.map((tag) => (
+            <option key={tag.rfid_tag_id} value={tag.rfid_tag_id}>
+              {tag.tag_code}
+            </option>
+          ))}
+        </select>
       </div>
-      <button onClick={handleSubmit} disabled={busy}>
+      <button onClick={handleSubmit} disabled={busy || !propertyId}>
         {busy ? "Saving..." : "Submit"}
       </button>
     </div>

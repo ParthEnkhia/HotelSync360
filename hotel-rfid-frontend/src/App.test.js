@@ -10,21 +10,18 @@ jest.mock("./MovementHistory", () => () => <div>Movement History</div>);
 jest.mock("./utils/axiosConfig", () => ({
   __esModule: true,
   default: {
-    get: jest.fn(() => Promise.resolve({ data: "Backend is online" })),
+    get: jest.fn(() => Promise.resolve({ data: { message: "Backend is online", auth_required: true } })),
     post: jest.fn(),
   },
   getAuthToken: jest.fn(() => ""),
   setAuthToken: jest.fn(),
 }));
 
-test("renders app title and key sections", () => {
+test("renders a clean login screen first", () => {
   render(<App />);
 
-  expect(screen.getByText(/HotelSync360 - RFID Tracker/i)).toBeInTheDocument();
-  expect(screen.getByText(/Admin Access/i)).toBeInTheDocument();
+  expect(screen.getByText(/HotelSync360/i)).toBeInTheDocument();
+  expect(screen.getByText(/Sign in to open the dashboard/i)).toBeInTheDocument();
   expect(screen.getByPlaceholderText(/Admin Email/i)).toBeInTheDocument();
-  expect(screen.getByText(/RFID Management/i)).toBeInTheDocument();
-  expect(screen.getByText(/Staff Force Allocation/i)).toBeInTheDocument();
-  expect(screen.getByText(/Add Guest/i)).toBeInTheDocument();
-  expect(screen.getByText(/Refresh Backend Status/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Login/i })).toBeInTheDocument();
 });

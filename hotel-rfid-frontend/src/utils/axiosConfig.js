@@ -44,15 +44,28 @@ const parseResponse = async (response) => {
 const request = async (method, path, body, config = {}) => {
   const url = `${BASE_URL}${path}${toQueryString(config.params)}`;
   const token = getAuthToken();
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(config.headers || {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(config.headers || {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (error) {
+    const networkError = new Error("Unable to reach backend");
+    networkError.response = {
+      status: 0,
+      data: {
+        error: "Unable to reach backend. Check that the backend server is running and the API URL is correct.",
+      },
+    };
+    throw networkError;
+  }
 
   return parseResponse(response);
 };

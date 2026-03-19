@@ -1,16 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "./utils/axiosConfig";
 
-function RFIDManagement() {
+function RFIDManagement({
+  guests = [],
+  staff = [],
+  availableGuestTags = [],
+  availableStaffTags = [],
+  onDataChanged,
+}) {
   const [tags, setTags] = useState([]);
-  const [createForm, setCreateForm] = useState({ tag_type: "GUEST" });
+  const [createForm, setCreateForm] = useState({
+    tag_code: "",
+    tag_type: "GUEST",
+    assignee_id: "",
+  });
   const [assignForm, setAssignForm] = useState({
     rfid_tag_id: "",
     assignee_type: "GUEST",
     assignee_id: "",
   });
-  const [releaseTagId, setReleaseTagId] = useState("");
-  const [deactivateTagId, setDeactivateTagId] = useState("");
   const [lastGeneratedCode, setLastGeneratedCode] = useState("");
 
   const fetchTags = async () => {
@@ -27,12 +35,45 @@ function RFIDManagement() {
     fetchTags();
   }, []);
 
+  const createAssignees = useMemo(
+    () => (createForm.tag_type === "GUEST" ? guests : staff),
+    [createForm.tag_type, guests, staff]
+  );
+
+  const assignAssignees = useMemo(
+    () => (assignForm.assignee_type === "GUEST" ? guests : staff),
+    [assignForm.assignee_type, guests, staff]
+  );
+
+  const assignableTags = useMemo(
+    () => (assignForm.assignee_type === "GUEST" ? availableGuestTags : availableStaffTags),
+    [assignForm.assignee_type, availableGuestTags, availableStaffTags]
+  );
+
+  const refreshAll = async () => {
+    await fetchTags();
+    if (onDataChanged) {
+      await onDataChanged();
+    }
+  };
+
   const createTag = async () => {
     try {
-      const res = await api.post("/rfid/create", { tag_type: createForm.tag_type });
+      const payload = {
+        tag_type: createForm.tag_type,
+        tag_code: createForm.tag_code || undefined,
+      };
+
+      if (createForm.assignee_id) {
+        payload.assignee_type = createForm.tag_type;
+        payload.assignee_id = Number(createForm.assignee_id);
+      }
+
+      const res = await api.post("/rfid/create", payload);
       setLastGeneratedCode(res.data?.tag_code || "");
       alert(`RFID tag created. Code: ${res.data?.tag_code || "N/A"}`);
-      fetchTags();
+      setCreateForm((prev) => ({ ...prev, tag_code: "", assignee_id: "" }));
+      await refreshAll();
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Error creating RFID tag";
       alert(errorMessage);
@@ -40,6 +81,11 @@ function RFIDManagement() {
   };
 
   const assignTag = async () => {
+    if (!assignForm.rfid_tag_id || !assignForm.assignee_id) {
+      alert("Select both a tag and a name");
+      return;
+    }
+
     try {
       await api.post("/rfid/assign", {
         rfid_tag_id: Number(assignForm.rfid_tag_id),
@@ -47,31 +93,30 @@ function RFIDManagement() {
         assignee_id: Number(assignForm.assignee_id),
       });
       alert("RFID assigned successfully");
-      fetchTags();
+      setAssignForm((prev) => ({ ...prev, rfid_tag_id: "", assignee_id: "" }));
+      await refreshAll();
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Error assigning RFID";
       alert(errorMessage);
     }
   };
 
-  const releaseTag = async () => {
+  const releaseTag = async (rfidTagId) => {
     try {
-      await api.post("/rfid/release", { rfid_tag_id: Number(releaseTagId) });
+      await api.post("/rfid/release", { rfid_tag_id: Number(rfidTagId) });
       alert("RFID released successfully");
-      setReleaseTagId("");
-      fetchTags();
+      await refreshAll();
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Error releasing RFID";
       alert(errorMessage);
     }
   };
 
-  const deactivateTag = async () => {
+  const deactivateTag = async (rfidTagId) => {
     try {
-      await api.delete(`/rfid/${Number(deactivateTagId)}`);
+      await api.delete(`/rfid/${Number(rfidTagId)}`);
       alert("RFID tag deactivated");
-      setDeactivateTagId("");
-      fetchTags();
+      await refreshAll();
     } catch (err) {
       const errorMessage = err.response?.data?.error || "Error deactivating RFID";
       alert(errorMessage);
@@ -83,56 +128,79 @@ function RFIDManagement() {
       <h2>RFID Management</h2>
 
       <h3>Create RFID Tag</h3>
-      <p>RFID code is auto-generated as a unique 8-digit number.</p>
-      <select
-        value={createForm.tag_type}
-        onChange={(e) => setCreateForm((prev) => ({ ...prev, tag_type: e.target.value }))}
-      >
-        <option value="GUEST">GUEST</option>
-        <option value="STAFF">STAFF</option>
-      </select>
-      <button onClick={createTag}>Create</button>
+      <div className="grid-3">
+        <input
+          placeholder="Tag Code (optional)"
+          value={createForm.tag_code}
+          onChange={(e) => setCreateForm((prev) => ({ ...prev, tag_code: e.target.value }))}
+        />
+        <select
+          value={createForm.tag_type}
+          onChange={(e) => setCreateForm({ tag_code: "", tag_type: e.target.value, assignee_id: "" })}
+        >
+          <option value="GUEST">Guest</option>
+          <option value="STAFF">Staff</option>
+        </select>
+        <select
+          value={createForm.assignee_id}
+          onChange={(e) => setCreateForm((prev) => ({ ...prev, assignee_id: e.target.value }))}
+        >
+          <option value="">Assign Later</option>
+          {createAssignees.map((person) => {
+            const personId = createForm.tag_type === "GUEST" ? person.guest_id : person.staff_id;
+            return (
+              <option key={personId} value={personId}>
+                {person.name}
+                {createForm.tag_type === "GUEST" && person.room_number ? ` - Room ${person.room_number}` : ""}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+      <button onClick={createTag}>Create Tag</button>
       {lastGeneratedCode ? (
         <p>
           Generated RFID Code: <strong>{lastGeneratedCode}</strong>
         </p>
       ) : null}
 
-      <h3>Assign RFID Tag</h3>
-      <input
-        placeholder="RFID Tag ID"
-        value={assignForm.rfid_tag_id}
-        onChange={(e) => setAssignForm((prev) => ({ ...prev, rfid_tag_id: e.target.value }))}
-      />
-      <select
-        value={assignForm.assignee_type}
-        onChange={(e) => setAssignForm((prev) => ({ ...prev, assignee_type: e.target.value }))}
-      >
-        <option value="GUEST">GUEST</option>
-        <option value="STAFF">STAFF</option>
-      </select>
-      <input
-        placeholder="Assignee ID"
-        value={assignForm.assignee_id}
-        onChange={(e) => setAssignForm((prev) => ({ ...prev, assignee_id: e.target.value }))}
-      />
+      <h3>Assign Existing RFID Tag</h3>
+      <div className="grid-3">
+        <select
+          value={assignForm.assignee_type}
+          onChange={(e) => setAssignForm({ rfid_tag_id: "", assignee_type: e.target.value, assignee_id: "" })}
+        >
+          <option value="GUEST">Guest</option>
+          <option value="STAFF">Staff</option>
+        </select>
+        <select
+          value={assignForm.rfid_tag_id}
+          onChange={(e) => setAssignForm((prev) => ({ ...prev, rfid_tag_id: e.target.value }))}
+        >
+          <option value="">Select Available Tag</option>
+          {assignableTags.map((tag) => (
+            <option key={tag.rfid_tag_id} value={tag.rfid_tag_id}>
+              {tag.tag_code}
+            </option>
+          ))}
+        </select>
+        <select
+          value={assignForm.assignee_id}
+          onChange={(e) => setAssignForm((prev) => ({ ...prev, assignee_id: e.target.value }))}
+        >
+          <option value="">Select Name</option>
+          {assignAssignees.map((person) => {
+            const personId = assignForm.assignee_type === "GUEST" ? person.guest_id : person.staff_id;
+            return (
+              <option key={personId} value={personId}>
+                {person.name}
+                {assignForm.assignee_type === "GUEST" && person.room_number ? ` - Room ${person.room_number}` : ""}
+              </option>
+            );
+          })}
+        </select>
+      </div>
       <button onClick={assignTag}>Assign</button>
-
-      <h3>Release RFID Tag</h3>
-      <input
-        placeholder="RFID Tag ID"
-        value={releaseTagId}
-        onChange={(e) => setReleaseTagId(e.target.value)}
-      />
-      <button onClick={releaseTag}>Release</button>
-
-      <h3>Deactivate RFID Tag</h3>
-      <input
-        placeholder="RFID Tag ID"
-        value={deactivateTagId}
-        onChange={(e) => setDeactivateTagId(e.target.value)}
-      />
-      <button onClick={deactivateTag}>Deactivate</button>
 
       <h3>RFID Tag List</h3>
       <button onClick={fetchTags}>Refresh</button>
@@ -145,6 +213,7 @@ function RFIDManagement() {
             <th>Active</th>
             <th>Assigned To</th>
             <th>Assigned At</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -154,8 +223,26 @@ function RFIDManagement() {
               <td>{tag.tag_code}</td>
               <td>{tag.tag_type}</td>
               <td>{tag.is_active ? "Yes" : "No"}</td>
-              <td>{tag.assignee_type ? `${tag.assignee_type} #${tag.assignee_id}` : "Unassigned"}</td>
+              <td>
+                {tag.assignee_type
+                  ? `${tag.assignee_type}: ${tag.assignee_name || tag.assignee_id}`
+                  : "Unassigned"}
+              </td>
               <td>{tag.assigned_at || "-"}</td>
+              <td>
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    onClick={() => releaseTag(tag.rfid_tag_id)}
+                    disabled={!tag.assignee_type}
+                  >
+                    Release
+                  </button>
+                  <button type="button" onClick={() => deactivateTag(tag.rfid_tag_id)}>
+                    Deactivate
+                  </button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
