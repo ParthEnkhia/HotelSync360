@@ -250,6 +250,128 @@ router.get("/analytics/current-occupancy", async (req, res) => {
   }
 });
 
+router.get("/analytics/zone-heatmap", async (req, res) => {
+  try {
+    const propertyId = requirePropertyId(req, res);
+    if (!propertyId) return;
+
+    const [zoneRows] = await pool.query(
+      `SELECT z.zone_id, z.zone_name, z.zone_category
+       FROM ZONE z
+       WHERE z.property_id = ?
+       ORDER BY z.zone_name`,
+      [propertyId]
+    );
+
+    const [occupantRows] = await pool.query(
+      `SELECT zone_details.zone_id,
+              zone_details.zone_name,
+              zone_details.zone_category,
+              zone_details.reader_name,
+              zone_details.scan_time,
+              zone_details.event_type,
+              t.rfid_tag_id,
+              t.tag_code,
+              t.tag_type,
+              ra.assignee_type,
+              ra.assignee_id,
+              CASE
+                WHEN ra.assignee_type = 'GUEST' THEN g.name
+                WHEN ra.assignee_type = 'STAFF' THEN s.name
+                ELSE NULL
+              END AS assignee_name
+       FROM (
+         SELECT latest.rfid_tag_id,
+                z.zone_id,
+                z.zone_name,
+                z.zone_category,
+                r.reader_name,
+                m.scan_time,
+                m.event_type
+         FROM (
+           SELECT m1.rfid_tag_id, MAX(m1.movement_id) AS latest_movement_id
+           FROM MOVEMENT_TAG m1
+           JOIN RFID_READER r1
+             ON r1.reader_id = m1.reader_id
+           JOIN ZONE z1
+             ON z1.zone_id = r1.zone_id
+           WHERE z1.property_id = ?
+           GROUP BY m1.rfid_tag_id
+         ) latest
+         JOIN MOVEMENT_TAG m
+           ON m.movement_id = latest.latest_movement_id
+         JOIN RFID_READER r
+           ON r.reader_id = m.reader_id
+         JOIN ZONE z
+           ON z.zone_id = r.zone_id
+         WHERE m.event_type IN ('ENTRY', 'PING')
+       ) zone_details
+       JOIN RFID_TAG t
+         ON t.rfid_tag_id = zone_details.rfid_tag_id
+        AND t.is_active = TRUE
+       LEFT JOIN RFID_ASSIGNMENT ra
+         ON ra.rfid_tag_id = t.rfid_tag_id
+        AND ra.is_active = TRUE
+       LEFT JOIN GUEST g
+         ON ra.assignee_type = 'GUEST'
+        AND ra.assignee_id = g.guest_id
+        AND g.is_active = TRUE
+       LEFT JOIN STAFF s
+         ON ra.assignee_type = 'STAFF'
+        AND ra.assignee_id = s.staff_id
+        AND s.is_active = TRUE
+       ORDER BY zone_details.zone_name, zone_details.scan_time DESC, t.rfid_tag_id DESC`,
+      [propertyId]
+    );
+
+    const occupantsByZoneId = new Map();
+    for (const row of occupantRows) {
+      const entry = {
+        rfid_tag_id: row.rfid_tag_id,
+        tag_code: row.tag_code,
+        tag_type: row.tag_type,
+        assignee_type: row.assignee_type,
+        assignee_id: row.assignee_id,
+        assignee_name: row.assignee_name || null,
+        display_name: row.assignee_name || `${row.tag_type} Tag ${row.tag_code}`,
+        reader_name: row.reader_name || null,
+        scan_time: row.scan_time,
+        event_type: row.event_type,
+      };
+
+      const existing = occupantsByZoneId.get(row.zone_id) || [];
+      existing.push(entry);
+      occupantsByZoneId.set(row.zone_id, existing);
+    }
+
+    const maxOccupancy = zoneRows.reduce((highest, zone) => {
+      const count = (occupantsByZoneId.get(zone.zone_id) || []).length;
+      return Math.max(highest, count);
+    }, 0);
+
+    const zones = zoneRows.map((zone) => {
+      const occupants = occupantsByZoneId.get(zone.zone_id) || [];
+      return {
+        zone_id: zone.zone_id,
+        zone_name: zone.zone_name,
+        zone_category: zone.zone_category,
+        occupancy_count: occupants.length,
+        heat_ratio: maxOccupancy > 0 ? Number((occupants.length / maxOccupancy).toFixed(2)) : 0,
+        occupants,
+      };
+    });
+
+    res.json({
+      property_id: propertyId,
+      max_occupancy: maxOccupancy,
+      zones,
+    });
+  } catch (error) {
+    console.error("Zone Heatmap Error:", error);
+    res.status(500).json({ error: "Error fetching zone heatmap" });
+  }
+});
+
 router.get("/analytics/today-movements", async (req, res) => {
   try {
     const { property_id } = req.query;
