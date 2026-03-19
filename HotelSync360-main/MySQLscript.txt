@@ -1,0 +1,237 @@
+CREATE DATABASE IF NOT EXISTS hotel_movement_tracker;
+USE hotel_movement_tracker;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS STAFF_ZONE_ALLOCATION;
+DROP TABLE IF EXISTS TASK;
+DROP TABLE IF EXISTS MOVEMENT_TAG;
+DROP TABLE IF EXISTS RFID_ASSIGNMENT;
+DROP TABLE IF EXISTS RFID_READER;
+DROP TABLE IF EXISTS GUEST;
+DROP TABLE IF EXISTS ADMIN;
+DROP TABLE IF EXISTS STAFF;
+DROP TABLE IF EXISTS RFID_TAG;
+DROP TABLE IF EXISTS ROOM;
+DROP TABLE IF EXISTS ZONE;
+DROP TABLE IF EXISTS PROPERTY;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE PROPERTY (
+    property_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_name VARCHAR(150) NOT NULL,
+    address_line1 VARCHAR(200) NULL,
+    city VARCHAR(100) NULL,
+    state VARCHAR(100) NULL,
+    country VARCHAR(100) NULL,
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE ZONE (
+    zone_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    zone_name VARCHAR(100) NOT NULL,
+    zone_category VARCHAR(50) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_zone_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT uq_zone_per_property UNIQUE (property_id, zone_name)
+) ENGINE=InnoDB;
+
+CREATE TABLE ROOM (
+    room_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    room_number VARCHAR(20) NOT NULL,
+    room_type VARCHAR(50) NULL,
+    zone_id INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_room_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_room_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT uq_room_per_property UNIQUE (property_id, room_number)
+) ENGINE=InnoDB;
+
+CREATE TABLE RFID_TAG (
+    rfid_tag_id INT AUTO_INCREMENT PRIMARY KEY,
+    tag_code VARCHAR(100) NOT NULL UNIQUE,
+    tag_type ENUM('GUEST', 'STAFF') NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE STAFF (
+    staff_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(50) NULL,
+    phone VARCHAR(20) NULL,
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_staff_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE ADMIN (
+    admin_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE GUEST (
+    guest_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NULL,
+    status ENUM('CHECKED_IN', 'CHECKED_OUT') NOT NULL DEFAULT 'CHECKED_IN',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    check_in_time DATETIME NULL,
+    check_out_time DATETIME NULL,
+    room_id INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_guest_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_guest_room
+        FOREIGN KEY (room_id) REFERENCES ROOM(room_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE RFID_READER (
+    reader_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    zone_id INT NOT NULL,
+    reader_connection VARCHAR(150) NULL,
+    reader_name VARCHAR(100) NULL,
+    status ENUM('ONLINE', 'OFFLINE', 'MAINTENANCE') NOT NULL DEFAULT 'ONLINE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reader_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_reader_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE RFID_ASSIGNMENT (
+    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
+    rfid_tag_id INT NOT NULL,
+    assignee_type ENUM('GUEST', 'STAFF') NOT NULL,
+    assignee_id INT NOT NULL,
+    assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    released_at DATETIME NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    notes VARCHAR(255) NULL,
+    CONSTRAINT fk_assignment_tag
+        FOREIGN KEY (rfid_tag_id) REFERENCES RFID_TAG(rfid_tag_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE MOVEMENT_TAG (
+    movement_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    scan_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    rfid_tag_id INT NOT NULL,
+    reader_id INT NOT NULL,
+    event_type ENUM('ENTRY', 'EXIT', 'PING') NOT NULL DEFAULT 'PING',
+    signal_strength INT NULL,
+    raw_payload JSON NULL,
+    CONSTRAINT fk_movement_tag
+        FOREIGN KEY (rfid_tag_id) REFERENCES RFID_TAG(rfid_tag_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_movement_reader
+        FOREIGN KEY (reader_id) REFERENCES RFID_READER(reader_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE TASK (
+    task_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    task_type VARCHAR(100) NULL,
+    status ENUM('PENDING', 'ASSIGNED', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    priority ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL') NOT NULL DEFAULT 'MEDIUM',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    assigned_time DATETIME NULL,
+    complete_time DATETIME NULL,
+    zone_id INT NULL,
+    room_id INT NULL,
+    staff_id INT NULL,
+    description VARCHAR(255) NULL,
+    CONSTRAINT fk_task_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_task_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_task_room
+        FOREIGN KEY (room_id) REFERENCES ROOM(room_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_task_staff
+        FOREIGN KEY (staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE STAFF_ZONE_ALLOCATION (
+    allocation_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    staff_id INT NOT NULL,
+    zone_id INT NOT NULL,
+    allocated_by_staff_id INT NULL,
+    priority ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL') NOT NULL DEFAULT 'MEDIUM',
+    status ENUM('PLANNED', 'ACTIVE', 'ENDED', 'CANCELLED') NOT NULL DEFAULT 'PLANNED',
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NULL,
+    reason VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_alloc_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_staff
+        FOREIGN KEY (staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_by_staff
+        FOREIGN KEY (allocated_by_staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_zone_property ON ZONE(property_id);
+CREATE INDEX idx_room_property ON ROOM(property_id);
+CREATE INDEX idx_room_zone ON ROOM(zone_id);
+CREATE INDEX idx_staff_property_status ON STAFF(property_id, status, is_active);
+CREATE INDEX idx_guest_property_status ON GUEST(property_id, status, is_active);
+CREATE INDEX idx_guest_room ON GUEST(room_id);
+CREATE INDEX idx_assignment_lookup ON RFID_ASSIGNMENT(assignee_type, assignee_id, is_active);
+CREATE INDEX idx_assignment_tag_active ON RFID_ASSIGNMENT(rfid_tag_id, is_active);
+CREATE INDEX idx_reader_zone_status ON RFID_READER(zone_id, status);
+CREATE INDEX idx_reader_property ON RFID_READER(property_id);
+CREATE INDEX idx_movement_time ON MOVEMENT_TAG(scan_time);
+CREATE INDEX idx_movement_tag_time ON MOVEMENT_TAG(rfid_tag_id, scan_time);
+CREATE INDEX idx_movement_reader_time ON MOVEMENT_TAG(reader_id, scan_time);
+CREATE INDEX idx_task_status_priority ON TASK(status, priority);
+CREATE INDEX idx_task_zone ON TASK(zone_id);
+CREATE INDEX idx_task_staff ON TASK(staff_id);
+CREATE INDEX idx_task_property ON TASK(property_id);
+CREATE INDEX idx_alloc_zone_status_time ON STAFF_ZONE_ALLOCATION(zone_id, status, start_time);
+CREATE INDEX idx_alloc_staff_status ON STAFF_ZONE_ALLOCATION(staff_id, status);
+CREATE INDEX idx_alloc_property ON STAFF_ZONE_ALLOCATION(property_id);
