@@ -1,0 +1,350 @@
+CREATE DATABASE IF NOT EXISTS hotel_movement_tracker
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE hotel_movement_tracker;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS STAFF_ZONE_ALLOCATION;
+DROP TABLE IF EXISTS TASK;
+DROP TABLE IF EXISTS MOVEMENT_TAG;
+DROP TABLE IF EXISTS RFID_ASSIGNMENT;
+DROP TABLE IF EXISTS RFID_READER;
+DROP TABLE IF EXISTS GUEST;
+DROP TABLE IF EXISTS ADMIN;
+DROP TABLE IF EXISTS STAFF;
+DROP TABLE IF EXISTS RFID_TAG;
+DROP TABLE IF EXISTS ROOM;
+DROP TABLE IF EXISTS ZONE;
+DROP TABLE IF EXISTS PROPERTY;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+CREATE TABLE PROPERTY (
+    property_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_name VARCHAR(150) NOT NULL,
+    address_line1 VARCHAR(200) NULL,
+    city VARCHAR(100) NULL,
+    state VARCHAR(100) NULL,
+    country VARCHAR(100) NULL,
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE ZONE (
+    zone_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    zone_name VARCHAR(100) NOT NULL,
+    zone_category VARCHAR(50) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_zone_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE KEY uq_zone_per_property (property_id, zone_name),
+    UNIQUE KEY uq_zone_property_zone (property_id, zone_id),
+    INDEX idx_zone_property (property_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE ROOM (
+    room_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    room_number VARCHAR(20) NOT NULL,
+    room_type VARCHAR(50) NULL,
+    zone_id INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_room_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_room_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    UNIQUE KEY uq_room_per_property (property_id, room_number),
+    INDEX idx_room_property (property_id),
+    INDEX idx_room_zone (zone_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE RFID_TAG (
+    rfid_tag_id INT AUTO_INCREMENT PRIMARY KEY,
+    tag_code VARCHAR(100) NOT NULL,
+    tag_type ENUM('GUEST', 'STAFF') NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_rfid_tag_code (tag_code),
+    INDEX idx_rfid_tag_type_active (tag_type, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE STAFF (
+    staff_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    role VARCHAR(50) NULL,
+    phone VARCHAR(20) NULL,
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_staff_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    UNIQUE KEY uq_staff_property_staff (property_id, staff_id),
+    INDEX idx_staff_property_status (property_id, status, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE ADMIN (
+    admin_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_admin_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE GUEST (
+    guest_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NULL,
+    status ENUM('CHECKED_IN', 'CHECKED_OUT') NOT NULL DEFAULT 'CHECKED_IN',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    check_in_time DATETIME NULL,
+    check_out_time DATETIME NULL,
+    room_id INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_guest_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_guest_room
+        FOREIGN KEY (room_id) REFERENCES ROOM(room_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_guest_property_status (property_id, status, is_active),
+    INDEX idx_guest_room (room_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE RFID_READER (
+    reader_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    zone_id INT NOT NULL,
+    reader_connection VARCHAR(150) NULL,
+    reader_name VARCHAR(100) NULL,
+    status ENUM('ONLINE', 'OFFLINE', 'MAINTENANCE') NOT NULL DEFAULT 'ONLINE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reader_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_reader_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    INDEX idx_reader_property (property_id),
+    INDEX idx_reader_zone_status (zone_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE RFID_ASSIGNMENT (
+    assignment_id INT AUTO_INCREMENT PRIMARY KEY,
+    rfid_tag_id INT NOT NULL,
+    assignee_type ENUM('GUEST', 'STAFF') NOT NULL,
+    assignee_id INT NOT NULL,
+    assigned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    released_at DATETIME NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    notes VARCHAR(255) NULL,
+    active_tag_key INT GENERATED ALWAYS AS (
+        CASE WHEN is_active = 1 THEN rfid_tag_id ELSE NULL END
+    ) VIRTUAL,
+    active_assignee_key VARCHAR(120) GENERATED ALWAYS AS (
+        CASE WHEN is_active = 1 THEN CONCAT(assignee_type, '#', assignee_id) ELSE NULL END
+    ) VIRTUAL,
+    CONSTRAINT fk_assignment_tag
+        FOREIGN KEY (rfid_tag_id) REFERENCES RFID_TAG(rfid_tag_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    UNIQUE KEY uq_active_tag (active_tag_key),
+    UNIQUE KEY uq_active_assignee (active_assignee_key),
+    INDEX idx_assignment_lookup (assignee_type, assignee_id, is_active),
+    INDEX idx_assignment_tag_active (rfid_tag_id, is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE MOVEMENT_TAG (
+    movement_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    scan_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    rfid_tag_id INT NOT NULL,
+    reader_id INT NOT NULL,
+    event_type ENUM('ENTRY', 'EXIT', 'PING') NOT NULL DEFAULT 'PING',
+    signal_strength INT NULL,
+    raw_payload JSON NULL,
+    CONSTRAINT fk_movement_tag
+        FOREIGN KEY (rfid_tag_id) REFERENCES RFID_TAG(rfid_tag_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_movement_reader
+        FOREIGN KEY (reader_id) REFERENCES RFID_READER(reader_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX idx_movement_time (scan_time),
+    INDEX idx_movement_tag_time (rfid_tag_id, scan_time),
+    INDEX idx_movement_reader_time (reader_id, scan_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE TASK (
+    task_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    task_type VARCHAR(100) NULL,
+    status ENUM('PENDING', 'ASSIGNED', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    priority ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL') NOT NULL DEFAULT 'MEDIUM',
+    created_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    assigned_time DATETIME NULL,
+    complete_time DATETIME NULL,
+    zone_id INT NULL,
+    room_id INT NULL,
+    staff_id INT NULL,
+    description VARCHAR(255) NULL,
+    CONSTRAINT fk_task_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_task_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_task_room
+        FOREIGN KEY (room_id) REFERENCES ROOM(room_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_task_staff
+        FOREIGN KEY (staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_task_property (property_id),
+    INDEX idx_task_status_priority (status, priority),
+    INDEX idx_task_zone (zone_id),
+    INDEX idx_task_room (room_id),
+    INDEX idx_task_staff (staff_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE STAFF_ZONE_ALLOCATION (
+    allocation_id INT AUTO_INCREMENT PRIMARY KEY,
+    property_id INT NOT NULL,
+    staff_id INT NOT NULL,
+    zone_id INT NOT NULL,
+    allocated_by_staff_id INT NULL,
+    priority ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL') NOT NULL DEFAULT 'MEDIUM',
+    status ENUM('PLANNED', 'ACTIVE', 'ENDED', 'CANCELLED') NOT NULL DEFAULT 'PLANNED',
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NULL,
+    reason VARCHAR(255) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_alloc_property
+        FOREIGN KEY (property_id) REFERENCES PROPERTY(property_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_staff
+        FOREIGN KEY (staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_zone
+        FOREIGN KEY (zone_id) REFERENCES ZONE(zone_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_alloc_by_staff
+        FOREIGN KEY (allocated_by_staff_id) REFERENCES STAFF(staff_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    INDEX idx_alloc_property (property_id),
+    INDEX idx_alloc_zone_status_time (zone_id, status, start_time),
+    INDEX idx_alloc_staff_status (staff_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+START TRANSACTION;
+
+INSERT INTO PROPERTY (property_name, address_line1, city, state, country, status)
+VALUES
+    ('Default Hotel Property', 'Main Road', 'Mumbai', 'Maharashtra', 'India', 'ACTIVE');
+
+SET @property_id := LAST_INSERT_ID();
+
+INSERT INTO ZONE (property_id, zone_name, zone_category)
+VALUES
+    (@property_id, 'Reception', 'PUBLIC'),
+    (@property_id, 'Lobby', 'PUBLIC'),
+    (@property_id, 'Floor-1', 'GUEST'),
+    (@property_id, 'Back Office', 'STAFF');
+
+SET @reception_zone_id := (
+    SELECT zone_id FROM ZONE
+    WHERE property_id = @property_id AND zone_name = 'Reception'
+    LIMIT 1
+);
+
+SET @lobby_zone_id := (
+    SELECT zone_id FROM ZONE
+    WHERE property_id = @property_id AND zone_name = 'Lobby'
+    LIMIT 1
+);
+
+SET @floor_1_zone_id := (
+    SELECT zone_id FROM ZONE
+    WHERE property_id = @property_id AND zone_name = 'Floor-1'
+    LIMIT 1
+);
+
+SET @back_office_zone_id := (
+    SELECT zone_id FROM ZONE
+    WHERE property_id = @property_id AND zone_name = 'Back Office'
+    LIMIT 1
+);
+
+INSERT INTO ROOM (property_id, room_number, room_type, zone_id)
+VALUES
+    (@property_id, '101', 'DELUXE', @floor_1_zone_id),
+    (@property_id, '102', 'DELUXE', @floor_1_zone_id),
+    (@property_id, '201', 'SUITE', @floor_1_zone_id);
+
+INSERT INTO STAFF (property_id, name, role, phone, status, is_active)
+VALUES
+    (@property_id, 'Amit Sharma', 'SECURITY', '9876543210', 'ACTIVE', 1),
+    (@property_id, 'Neha Verma', 'HOUSEKEEPING', '9876543211', 'ACTIVE', 1);
+
+INSERT INTO RFID_TAG (tag_code, tag_type, is_active)
+VALUES
+    ('STAFF-0001', 'STAFF', 1),
+    ('STAFF-0002', 'STAFF', 1),
+    ('STAFF-0003', 'STAFF', 1),
+    ('GUEST-0001', 'GUEST', 1),
+    ('GUEST-0002', 'GUEST', 1),
+    ('GUEST-0003', 'GUEST', 1);
+
+INSERT INTO RFID_READER (property_id, zone_id, reader_connection, reader_name, status)
+VALUES
+    (@property_id, @reception_zone_id, '192.168.1.10', 'Reception Reader', 'ONLINE'),
+    (@property_id, @lobby_zone_id, '192.168.1.11', 'Lobby Reader', 'ONLINE'),
+    (@property_id, @floor_1_zone_id, '192.168.1.12', 'Floor-1 Reader', 'ONLINE'),
+    (@property_id, @back_office_zone_id, '192.168.1.13', 'Back Office Reader', 'ONLINE');
+
+SET @amit_staff_id := (
+    SELECT staff_id FROM STAFF
+    WHERE property_id = @property_id AND name = 'Amit Sharma'
+    LIMIT 1
+);
+
+SET @neha_staff_id := (
+    SELECT staff_id FROM STAFF
+    WHERE property_id = @property_id AND name = 'Neha Verma'
+    LIMIT 1
+);
+
+SET @staff_tag_1_id := (
+    SELECT rfid_tag_id FROM RFID_TAG
+    WHERE tag_code = 'STAFF-0001'
+    LIMIT 1
+);
+
+SET @staff_tag_2_id := (
+    SELECT rfid_tag_id FROM RFID_TAG
+    WHERE tag_code = 'STAFF-0002'
+    LIMIT 1
+);
+
+INSERT INTO RFID_ASSIGNMENT (rfid_tag_id, assignee_type, assignee_id, assigned_at, is_active)
+VALUES
+    (@staff_tag_1_id, 'STAFF', @amit_staff_id, NOW(), 1),
+    (@staff_tag_2_id, 'STAFF', @neha_staff_id, NOW(), 1);
+
+COMMIT;
