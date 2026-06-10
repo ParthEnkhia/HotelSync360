@@ -35,7 +35,7 @@ router.post("/register", async (req, res) => {
 
     res.json({ message: "Admin registered successfully" });
   } catch (error) {
-    if (error && error.code === "ER_DUP_ENTRY") {
+    if (error && error.code === "23505") {
       return res.status(409).json({ error: "Email already registered" });
     }
     res.status(500).json({ error: "Registration failed" });

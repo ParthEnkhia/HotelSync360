@@ -237,7 +237,7 @@ router.get("/analytics/today-movements", async (req, res) => {
        FROM MOVEMENT_TAG m
        JOIN RFID_READER r ON m.reader_id = r.reader_id
        JOIN ZONE z ON r.zone_id = z.zone_id
-       WHERE DATE(m.scan_time) = CURDATE() ${propertyJoinFilter}`,
+       WHERE DATE(m.scan_time) = CURRENT_DATE ${propertyJoinFilter}`,
       params
     );
 

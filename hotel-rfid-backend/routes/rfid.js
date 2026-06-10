@@ -95,7 +95,7 @@ router.post("/create", async (req, res) => {
   } catch (error) {
     console.error("Create RFID Error:", error);
     await connection.rollback();
-    if (error.code === "ER_DUP_ENTRY") {
+    if (error.code === "23505") {
       return res.status(400).json({ error: "tag_code already exists" });
     }
     res.status(500).json({ error: "Error creating RFID tag" });
@@ -215,7 +215,7 @@ router.post("/assign", async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Assign RFID Error:", error);
-    if (error.code === "ER_DUP_ENTRY") {
+    if (error.code === "23505") {
       return res.status(400).json({ error: "RFID tag or assignee already has active assignment" });
     }
     res.status(500).json({ error: "Error assigning RFID" });

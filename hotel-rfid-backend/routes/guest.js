@@ -60,7 +60,7 @@ router.post("/add", async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error("Add Guest Error:", error);
-    if (error.code === "ER_DUP_ENTRY") {
+    if (error.code === "23505") {
       return res.status(400).json({ error: "RFID tag is already assigned" });
     }
     res.status(500).json({ error: "Error adding guest" });

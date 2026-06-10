@@ -17,7 +17,7 @@ const PRIORITY_STYLES = {
   CRITICAL: { color: "#f87171" },
 };
 
-const toSqlDatetime = (v) => {
+const toDatetime = (v) => {
   if (!v) return null;
   return v.length === 16 ? `${v.replace("T", " ")}:00` : v.replace("T", " ");
 };
@@ -67,8 +67,8 @@ function StaffAllocation({ propertyId, staff = [], zones = [], setToast }) {
         zone_id:              Number(form.zone_id),
         allocated_by_staff_id: form.allocated_by_staff_id ? Number(form.allocated_by_staff_id) : null,
         priority:             form.priority,
-        start_time:           toSqlDatetime(form.start_time),
-        end_time:             toSqlDatetime(form.end_time),
+        start_time:           toDatetime(form.start_time),
+        end_time:             toDatetime(form.end_time),
         reason:               form.reason.trim() || null,
       });
       setToast({ type: "success", message: "Allocation created successfully." });

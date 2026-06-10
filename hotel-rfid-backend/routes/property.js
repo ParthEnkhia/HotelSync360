@@ -149,7 +149,7 @@ router.post("/:id/zones", async (req, res) => {
 
     res.status(201).json({ message: "Zone created", zone_id: result.insertId });
   } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "23505") {
       return res.status(409).json({ error: "A zone with that name already exists for this property" });
     }
     console.error("Create Zone Error:", err);
@@ -181,7 +181,7 @@ router.put("/:id/zones/:zoneId", async (req, res) => {
 
     res.json({ message: "Zone updated" });
   } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "23505") {
       return res.status(409).json({ error: "A zone with that name already exists for this property" });
     }
     console.error("Update Zone Error:", err);
@@ -208,7 +208,7 @@ router.delete("/:id/zones/:zoneId", async (req, res) => {
     res.json({ message: "Zone deleted" });
   } catch (err) {
     // FK constraint — zone is still referenced by rooms/readers/allocations
-    if (err.code === "ER_ROW_IS_REFERENCED_2" || err.code === "ER_ROW_IS_REFERENCED") {
+    if (err.code === "23503") {
       return res.status(409).json({
         error: "Cannot delete zone — it is still referenced by rooms, readers, or allocations",
       });
